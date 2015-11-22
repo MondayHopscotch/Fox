@@ -1,10 +1,12 @@
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.Input;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.bitdecay.jump.BitBody;
 import com.bitdecay.jump.BodyType;
 import com.bitdecay.jump.JumperBody;
+import com.bitdecay.jump.collision.ContactAdapter;
 import com.bitdecay.jump.control.PlayerInputController;
 import com.bitdecay.jump.gdx.input.GDXControls;
 import com.bitdecay.jump.gdx.integration.BitTextureAtlas;
@@ -17,6 +19,9 @@ import com.bitdecay.jump.render.JumperRenderStateWatcher;
 import com.bytebreak.animagic.Animation;
 import com.bytebreak.animagic.Animator;
 
+import java.util.Arrays;
+import java.util.List;
+
 /**
  * Created by jake on 11/11/2015.
  */
@@ -25,14 +30,26 @@ public class PlayerObject extends GameObject {
     TextureRegion playerTex = new TextureRegion();
     JumperBody playerBody = new JumperBody();
 
+    TextureRegion spiritTex = new TextureRegion();
+    JumperBody spiritBody = new JumperBody();
+
+    BitBody spiritContact;
+
     Animator playerAnimator = new Animator("Player");
 
+    BitBody controlBody;
+    PlayerInputController controller;
+
     @Override
-    public BitBody build(LevelObject template) {
+    public List<BitBody> build(LevelObject template) {
+        controller = new PlayerInputController(GDXControls.defaultMapping);
+
         DebugSpawnObject spawnObject = (DebugSpawnObject) template;
-        BitBody body = buildPlayerBody(spawnObject);
+        buildPlayerBody(spawnObject);
         buildAnimations();
-        return body;
+
+        updateControlTo(playerBody);
+        return Arrays.asList(playerBody, spiritBody);
     }
 
     private void buildAnimations() {
@@ -62,14 +79,63 @@ public class PlayerObject extends GameObject {
         playerBody.jumperProps = spawnObject.jumpProps;
 
         playerBody.bodyType = BodyType.DYNAMIC;
-        playerBody.aabb = new BitRectangle(spawnObject.rect.xy.x,spawnObject.rect.xy.y,64,64);
+        playerBody.aabb = new BitRectangle(spawnObject.rect.xy.x, spawnObject.rect.xy.y, 64, 64);
         playerBody.renderStateWatcher = new JumperRenderStateWatcher();
-        playerBody.controller = new PlayerInputController(GDXControls.defaultMapping);
+
+        spiritBody.props = spawnObject.props;
+        spiritBody.jumperProps = spawnObject.jumpProps;
+
+        spiritBody.bodyType = BodyType.DYNAMIC;
+        spiritBody.aabb = new BitRectangle(spawnObject.rect.xy.x, spawnObject.rect.xy.y, 64, 64);
+        spiritBody.renderStateWatcher = new JumperRenderStateWatcher();
+        spiritBody.controller = new PlayerInputController(GDXControls.defaultMapping);
+        spiritBody.active = false;
+        spiritBody.addContactListener(new ContactAdapter() {
+
+            @Override
+            public void contactStarted(BitBody other) {
+                if(other.bodyType.equals(BodyType.DYNAMIC)) {
+                    spiritContact = other;
+                }
+            }
+
+            @Override
+            public void contactEnded(BitBody other) {
+                if(other == spiritContact) {
+                    spiritContact = null;
+                }
+            }
+        });
         return playerBody;
+    }
+
+    private void updateControlTo(BitBody newBody) {
+        if (controlBody != null) {
+            if(controlBody.controller == controller)
+            controlBody.controller = null;
+        }
+        controlBody = newBody;
+        if (newBody.controller == null) {
+            controlBody.controller = controller;
+        }
     }
 
     @Override
     public void update(float delta) {
+        if (Gdx.input.isKeyJustPressed(Input.Keys.B)) {
+            if (controlBody != spiritBody) {
+                spiritBody.active = true;
+                spiritBody.aabb.xy.set(controlBody.aabb.xy);
+                spiritBody.velocity.set(0, 0);
+                updateControlTo(spiritBody);
+            } else {
+                if (spiritContact != null) {
+                    spiritBody.active = false;
+                    updateControlTo(spiritContact);
+                }
+            }
+        }
+
         String animation = playerBody.renderStateWatcher.getState().toString();
         if (playerAnimator.hasAnimation(animation)) {
             if (!animation.equals(playerAnimator.currentAnimationName())) {
@@ -78,14 +144,30 @@ public class PlayerObject extends GameObject {
             playerAnimator.update(delta);
             playerTex = playerAnimator.getFrame();
         }
+
+        String spiritAnimation = spiritBody.renderStateWatcher.getState().toString();
+        if (playerAnimator.hasAnimation(spiritAnimation)) {
+            if (!spiritAnimation.equals(playerAnimator.currentAnimationName())) {
+                playerAnimator.switchToAnimation(spiritAnimation);
+            }
+            playerAnimator.update(delta);
+            spiritTex = playerAnimator.getFrame();
+        }
     }
 
     @Override
     public void render(SpriteBatch batch) {
-        if(playerBody.renderStateWatcher.getState().toString().toLowerCase().contains("right")) {
+        if (playerBody.renderStateWatcher.getState().toString().toLowerCase().contains("right")) {
             batch.draw(playerTex, playerBody.aabb.xy.x, playerBody.aabb.xy.y, playerBody.aabb.width, playerBody.aabb.height);
         } else {
-            batch.draw(playerTex, playerBody.aabb.xy.x+playerBody.aabb.width, playerBody.aabb.xy.y, -playerBody.aabb.width, playerBody.aabb.height);
+            batch.draw(playerTex, playerBody.aabb.xy.x + playerBody.aabb.width, playerBody.aabb.xy.y, -playerBody.aabb.width, playerBody.aabb.height);
+        }
+        if (spiritBody.active) {
+            if (spiritBody.renderStateWatcher.getState().toString().toLowerCase().contains("right")) {
+                batch.draw(spiritTex, spiritBody.aabb.xy.x, spiritBody.aabb.xy.y, spiritBody.aabb.width, spiritBody.aabb.height);
+            } else {
+                batch.draw(spiritTex, spiritBody.aabb.xy.x + spiritBody.aabb.width, spiritBody.aabb.xy.y, -spiritBody.aabb.width, spiritBody.aabb.height);
+            }
         }
     }
 }

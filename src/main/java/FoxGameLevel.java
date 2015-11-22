@@ -20,7 +20,9 @@ import com.bitdecay.jump.level.builder.TileObject;
 import com.bitdecay.jump.leveleditor.EditorHook;
 import com.bitdecay.jump.leveleditor.example.game.GameObject;
 import com.bitdecay.jump.leveleditor.example.game.SecretObject;
+import com.bitdecay.jump.leveleditor.example.game.ShellObject;
 import com.bitdecay.jump.leveleditor.example.level.SecretThing;
+import com.bitdecay.jump.leveleditor.example.level.ShellLevelObject;
 import com.bitdecay.jump.leveleditor.render.LevelEditor;
 
 import java.util.*;
@@ -123,7 +125,7 @@ public class FoxGameLevel implements EditorHook {
                 if (builderMap.containsKey(levelObject.getClass())) {
                     GameObject newObject;
                     newObject = (GameObject) builderMap.get(levelObject.getClass()).newInstance();
-                    bodies.add(newObject.build(levelObject));
+                    bodies.addAll(newObject.build(levelObject));
                     gameObjects.add(newObject);
                 } else {
                     bodies.add(levelObject.buildBody());
@@ -172,10 +174,10 @@ public class FoxGameLevel implements EditorHook {
     public List<RenderableLevelObject> getCustomObjects() {
         builderMap.put(SecretThing.class, SecretObject.class);
         builderMap.put(DebugSpawnObject.class, PlayerObject.class);
+        builderMap.put(ShellLevelObject.class, ShellObject.class);
         List<RenderableLevelObject> exampleItems = new ArrayList<>();
-        for (int i = 0; i < 100; i++) {
-            exampleItems.add(new SecretThing());
-        }
+        exampleItems.add(new SecretThing());
+        exampleItems.add(new ShellLevelObject());
         return exampleItems;
     }
 }
